@@ -21,11 +21,11 @@ var cookieParser = require('cookie-parser'),
     session = require('express-session');
 
 console.log('environment...');
-console.log(process.env.NODE_ENV);
+console.log(process.env.SOUNDKICK_IN_PRODUCTION);
 
 //Secrets
 require('dotenv').load();
-var env = process.env.NODE_ENV || 'dev';
+var env = process.env.SOUNDKICK_IN_PRODUCTION || 'dev';
 
 //Database
 var mongoose = require('mongoose'),
