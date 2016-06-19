@@ -20,6 +20,9 @@ var config = require('./config');
 var cookieParser = require('cookie-parser'),
     session = require('express-session');
 
+console.log('environment...');
+console.log(process.env.NODE_ENV);
+
 //Secrets
 require('dotenv').load();
 var env = process.env.NODE_ENV || 'dev';
