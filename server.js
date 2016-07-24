@@ -60,6 +60,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 //Sessions
 app.use(cookieParser());
 app.use(session({
+  name: 'soundkick-server',
   secret: 'this is a secret',
   saveUninitialized: true,
   resave: true,
