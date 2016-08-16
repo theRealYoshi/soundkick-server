@@ -15,8 +15,9 @@ class HomeStore {
     }, 5000);
   }
 
-  onGetAccessTokenFromSessionFail(){
-    console.log('access token has not been retrieved');
+  onGetAccessTokenFromSessionFail(jqXhr){
+      console.log("[Homestore.js] onGetAccessTokenFromSessionFail:" );
+      console.log(jqXhr.responseText);
   }
 
   onRedirectSuccess(data){

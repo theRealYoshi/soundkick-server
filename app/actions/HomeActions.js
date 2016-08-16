@@ -20,7 +20,7 @@ class HomeActions {
       this.actions.getAccessTokenFromSessionSuccess(data);
     })
     .fail(jqXhr => {
-      this.actions.getAccessTokenFromSessionFail();
+      this.actions.getAccessTokenFromSessionFail(jqXhr);
     })
   }
 

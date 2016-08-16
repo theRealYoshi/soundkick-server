@@ -27,7 +27,11 @@ class Api extends React.Component {
   }
 
   _handleTracks(){
-    ApiActions.checkTracks();
+    var payload = {
+        apiUrl: '/me/activities/all/own',
+        history: this.props.history
+    }
+    ApiActions.soundcloudApiGet(payload);
   }
 
   render() {

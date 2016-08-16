@@ -20,8 +20,7 @@ var config = require('./config');
 var cookieParser = require('cookie-parser'),
     session = require('express-session');
 
-console.log('environment...');
-console.log(process.env.SOUNDKICK_IN_PRODUCTION);
+console.log('[server.js] :environment...');
 
 //Secrets
 require('dotenv').load();
@@ -60,101 +59,146 @@ app.use(express.static(path.join(__dirname, 'public')));
 //Sessions
 app.use(cookieParser());
 app.use(session({
-  name: 'soundkick-server',
-  secret: 'this is a secret',
-  saveUninitialized: true,
-  resave: true,
-  duration: 30 * 60 * 1000,
-  activeDuration: 5 * 60 * 1000
+    name: 'soundkick-server',
+    secret: 'this is a secret',
+    saveUninitialized: true,
+    resave: true,
+    duration: 30 * 60 * 1000,
+    activeDuration: 10 * 60 * 1000,
+    cookie: {
+        maxAge: 5 * 60 * 1000
+    }
 }))
 
 app.post('/api/getAccessTokenFromSession', function(req, res){
-  // set session token here
-  if(req.session.soundcloudAccessToken){
-    console.log('access token has been set');
-    var soundcloudAccessToken = req.session.soundcloudAccessToken;
-    SC.init({
-      id: soundcloudClientId,
-      secret: soundcloudClientSecret,
-      uri: soundcloudURI,
-      accessToken: soundcloudAccessToken,
-      scope: soundcloudScope
-    })
-    res.send({soundcloudAccessToken: soundcloudAccessToken});
-  } else {
-    console.log("the access Token has not been set");
-    req.session = null;
-  }
+    console.log("[server.js] api/getAccessTokenFromSession: ");
+    console.log(req.session);
+    console.log(req.session.soundcloudAccessToken);
+    if(req.session.soundcloudAccessToken){
+        console.log('[server.js] api/getAccessTokenFromSession: access token has been set');
+        var soundcloudAccessToken = req.session.soundcloudAccessToken;
+        initializeSoundcloudApi(soundcloudAccessToken);
+        res.send({soundcloudAccessToken: soundcloudAccessToken});
+    } else {
+        req.session = null;
+        res.status(400).send("[server.js] api/getAccessTokenFromSession: the access Token has not been set")
+    }
 });
 
-// access Token as part of redirect
+// accessToken as part of redirect
 app.get('/api/redirectAuth', function(req,res){
   // differentiate at this url between prod and dev environments.
-  SC.init({
-    id: soundcloudClientId,
-    secret: soundcloudClientSecret,
-    uri: soundcloudURI,
-    scope: soundcloudScope
-  })
-  var redirectUrl = SC.getConnectUrl();
-  if(!redirectUrl){
-    console.log("url not available");
-    res.status(400).send("url not available");
-  } else {
-    res.send({redirectUrl: redirectUrl});
-  }
+    console.log("[server.js] api/redirectAuth: initializing SC.init");
+    initializeSoundcloudApi();
+    var redirectUrl = SC.getConnectUrl();
+    if(!redirectUrl){
+        res.status(400).send("[server.js] api/redirectAuth: redirect url not available");
+    } else {
+        res.send({redirectUrl: redirectUrl});
+    }
 });
 
 app.post('/api/getAccessToken', function(req, res){
-  var authorizationCode = req.body.authorizationCode;
-  console.log(authorizationCode);
-  console.log(req.session);
-  SC.authorize(authorizationCode, function(err, accessToken) {
-    if (err) {
-      res.status(400).send(err);
-    } else {
-      if (!req.session.soundcloudAccessToken){
-        req.session.soundcloudAccessToken = accessToken;
-        req.session.save();
-        console.log('Soundcloud Access Token Saved in Session');
-      }
-      console.log(SC);
-      res.send({soundcloudAccessToken: accessToken});
-    }
-  });
+    var authorizationCode = req.body.authorizationCode;
+    console.log("[server.js] api/getAccessToken : " + authorizationCode);
+    console.log("[server.js] api/getAccessToken : session token" + req.session);
+    SC.authorize(authorizationCode, function(err, accessToken) {
+        if (err) {
+          res.status(400).send(err);
+        } else {
+          if (!req.session.soundcloudAccessToken){
+            req.session.soundcloudAccessToken = accessToken;
+            req.session.save();
+            console.log('[server.js] api/getAccessToken: Soundcloud Access Token Saved in Session');
+          }
+          res.send({soundcloudAccessToken: accessToken});
+        }
+    });
 })
 
 app.post('/api/checkAccessTokenFromSession', function(req, res){
-  var soundcloudAccessToken = req.session.soundcloudAccessToken;
-  console.log(soundcloudAccessToken);
-  console.log(!soundcloudAccessToken);
-  if(!soundcloudAccessToken){
-    console.log("no access");
-    res.status(400).send({soundcloudAccess: false});
-  } else if (soundcloudAccessToken !== SC.accessToken){
-    res.status(400).send({soundcloudAccess: false});
-  } else {
-    res.send({
-      soundcloudAccess: true,
-      soundcloudAccessToken: soundcloudAccessToken
-    });
-  }
+    var soundcloudAccessToken = req.session.soundcloudAccessToken;
+    console.log("[server.js] api/checkAccessTokenFromSession: ");
+    console.log(req.session);
+    if(checkAccessToken(soundcloudAccessToken)){
+        console.log("[server.js] api/checkAccessTokenFromSession: access token in session");
+        res.send({
+                    soundcloudAccess: true,
+                    soundcloudAccessToken: soundcloudAccessToken
+                });
+    } else {
+        console.log("[server.js] api/checkAccessTokenFromSession: no access token in session");
+        res.status(400).send({
+                soundcloudAccess: false,
+                errorMessage: "[server.js] api/checkAccessTokenFromSession : no access token in session"
+            });
+    }
 })
 
-app.get('/api/checkTracks', function(req,res){
-  // cache results into songkick
-  console.log(SC.id);
-  var pageSize = 100;
-  SC.get('/me/activities/all/own', function(err, track){
-    if(err){
-      res.status(400).send('fjdakljfkdlasjfd');
-    } else {
-      console.log(track);
-      res.send({ soundcloudTracks: track});
+/*
+    for query data:
+        req.query to get access to params
+*/
+app.get('/api/soundcloudApiGet', function(req, res){
+    if(checkAccessToken(req.session.soundcloudAccessToken) === false){
+        res.status(400).send({
+            soundcloudAccess: false,
+            errorMessage: "[server.js] api/soundcloudApiGet do not have access to access token"
+        });
     }
-  })
+    var apiUrl = req.query.apiUrl;
+    SC.get(apiUrl, function(err, results){
+        console.log("[server.js] api/soundcloudApiGet: SC.get");
+        if(!err){
+            res.send(results);
+        } else {
+            console.log(err);
+            res.status(400).send({
+                errorMessage: err
+            });
+        }
+    });
 });
 
+
+function checkAccessToken(soundcloudAccessToken){
+    console.log("[server.js] checkAccessToken: ");
+    console.log(soundcloudAccessToken);
+    console.log("[server.js] SC.accessToken: ");
+    console.log(SC.accessToken);
+    console.log("[server.js] SC.isAuthorized: ");
+    console.log(SC.isAuthorized);
+    console.log("[server.js] SC.isInit: ");
+    console.log(SC.isInit);
+    if(!soundcloudAccessToken || soundcloudAccessToken !== SC.accessToken || !SC.isAuthorized){
+        return false;
+    } else if(!SC.isInit){
+        return initializeSoundcloudApi(soundcloudAccessToken);
+    }
+    return true;
+}
+
+function initializeSoundcloudApi(soundcloudAccessToken){
+    console.log("[server.js] initializeSoundcloudApi: ");
+    if(soundcloudAccessToken){
+        console.log("[server.js] initializeSoundcloudApi: soundcloudAccessToken Available");
+        SC.init({id: soundcloudClientId,
+                secret: soundcloudClientSecret,
+                uri: soundcloudURI,
+                accessToken: soundcloudAccessToken,
+                scope: soundcloudScope
+                });
+    } else {
+        console.log("[server.js] initializeSoundcloudApi: soundcloudAccessToken not available");
+        SC.init({
+                id: soundcloudClientId,
+                secret: soundcloudClientSecret,
+                uri: soundcloudURI,
+                scope: soundcloudScope
+        })
+    }
+    return SC.isInit;
+}
 
 app.use(function(req, res) {
   Router.match({ routes: routes.default, location: req.url }, function(err, redirectLocation, renderProps) {

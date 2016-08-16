@@ -7,20 +7,32 @@ class ApiStore {
   }
 
   onCheckAccessTokenFromSessionSuccess(data){
-    console.log(data);
+      /*
+      data  = {
+            soundcloudAccess: true | false,
+            soundcloudAccessToken: string
+      }
+      */
+      return true;
   }
 
-  onCheckAccessTokenFromSessionFail(data){
-    console.log(data.soundcloudAccess);
-    data.history.pushState(null, '/');
+  onCheckAccessTokenFromSessionFail(jqXhr){
+      console.log("[ApiStore.js] onCheckAccessTokenFromSessionFail: ");
+      console.log(jqXhr.responseJSON.errorMessage);
+      jqXhr.history.pushState(null, '/');
   }
 
-  onCheckTracksSuccess(data){
-
+  onSoundcloudApiGetSuccess(data){
+      console.log("[ApiStore.js] onSoundcloudApiGetSuccess: ");
+      console.log(data)
   }
 
-  onCheckTracksFail(data){
-
+  onSoundcloudApiGetFail(jqXhr){
+      console.log("[ApiStore.js] onSoundcloudApiGetFail: ");
+      console.log(jqXhr.responseJSON.errorMessage);
+      if(jqXhr.responseJSON.soundcloudAccess === false){
+          jqXhr.history.pushState(null, '/');
+      }
   }
 }
 
