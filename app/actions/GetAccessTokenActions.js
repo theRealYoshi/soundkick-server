@@ -21,8 +21,8 @@ class GetAccessTokenActions {
        data.history = payload.history;
        this.actions.getAccessTokenSuccess(data);
      })
-     .fail(() => {
-       this.actions.getAccessTokenFail();
+     .fail((jqXhr) => {
+       this.actions.getAccessTokenFail(jqXhr);
      });
   }
 

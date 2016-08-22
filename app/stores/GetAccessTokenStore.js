@@ -14,8 +14,9 @@ class GetAccessTokenStore {
     }, 3000);
   }
 
-  onGetAccessTokenFail(){
+  onGetAccessTokenFail(jqXhr){
     console.log("grabbing access token failed...");
+    console.log(jqXhr);
   }
 
 
