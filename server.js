@@ -18,8 +18,7 @@ var swig  = require('swig'),
 var config = require('./config');
 
 //Session
-var cookieParser = require('cookie-parser'),
-    session = require('express-session'),
+var session = require('express-session'),
     mongoStore = require('connect-mongo')(session);
 
 
@@ -35,15 +34,15 @@ var mongoose = require('mongoose'),
 
 //Soundcloud dependencies
 var SC = require('node-soundcloud');
-var soundcloudScope = "non-expiring";
+var SOUNDCLOUD_SCOPE = "non-expiring";
 if(env === 'dev'){
-  var soundcloudClientId = process.env.SOUNDCLOUD_DEV_CLIENT_ID,
-      soundcloudClientSecret = process.env.SOUNDCLOUD_DEV_CLIENT_SECRET,
-      soundcloudURI = process.env.SOUNDCLOUD_DEV_REDIRECT_URI;
+  var SOUNDCLOUD_CLIENT_ID = process.env.SOUNDCLOUD_DEV_CLIENT_ID,
+      SOUNDCLOUD_CLIENT_SECRET = process.env.SOUNDCLOUD_DEV_CLIENT_SECRET,
+      SOUNDCLOUD_URI = process.env.SOUNDCLOUD_DEV_REDIRECT_URI;
 } else {
-  var soundcloudClientId = process.env.SOUNDCLOUD_PROD_CLIENT_ID,
-      soundcloudClientSecret = process.env.SOUNDCLOUD_PROD_CLIENT_SECRET,
-      soundcloudURI = process.env.SOUNDCLOUD_PROD_REDIRECT_URI;
+  var SOUNDCLOUD_CLIENT_ID = process.env.SOUNDCLOUD_PROD_CLIENT_ID,
+      SOUNDCLOUD_CLIENT_SECRET = process.env.SOUNDCLOUD_PROD_CLIENT_SECRET,
+      SOUNDCLOUD_URI = process.env.SOUNDCLOUD_PROD_REDIRECT_URI;
 }
 
 var app = express();
@@ -61,178 +60,152 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 //Sessions
 var sessionStore = new mongoStore({url: config.mongoStore});
-app.use(cookieParser('sessionsecret123'));
 app.use(session({
     name: 'soundkick-server',
     secret: 'sessionsecret123',
-    saveUninitialized: true,
-    resave: true,
-    duration: 30 * 60 * 1000,
-    activeDuration: 10 * 60 * 1000,
+    saveUninitialized: false,
+    resave: false,
     cookie: {
-        maxAge: 10 * 60 * 1000
+        maxAge: 3 * 60 * 1000 // 10 minutes
     },
     store: sessionStore
 }));
+
+var SESSION_ID;
 sessionStore.on("create", function(sessionId){
-    console.log("----- SESSION UPDATE ----- ");
-    console.log("[server.js] sessionStore.oncreate: ");
-    console.log(sessionId);
+    console.log("----- SESSION CREATE ----- ");
+    SESSION_ID = sessionId;
 });
 
 sessionStore.on("touch", function(sessionId){
-    console.log("----- SESSION UPDATE ----- ");
-    console.log("[server.js] sessionStore.ontouch: ");
+    console.log("----- SESSION TOUCH ----- ");
     console.log(sessionId);
+    SESSION_ID = sessionId;
 });
 
 sessionStore.on("update", function(sessionId){
     console.log("----- SESSION UPDATE ----- ");
-    console.log("[server.js] sessionStore.onupdate: ");
-    console.log(sessionId);
+    SESSION_ID = sessionId;
 });
 
 sessionStore.on("set", function(sessionId){
-    console.log("----- SESSION UPDATE ----- ");
-    console.log("[server.js] sessionStore.onset: ");
-    console.log(sessionId);
+    console.log("----- SESSION SET ----- ");
+    SESSION_ID = sessionId;
 });
 
 sessionStore.on("destroy", function(sessionId){
-    console.log("----- SESSION UPDATE ----- ");
-    console.log("[server.js] sessionStore.ondestroy: ");
-    console.log(sessionId);
+    console.log("----- SESSION DESTROY ----- ");
+    SESSION_ID = null;
 });
 
 sessionStore.on("error", function(sessionId){
-    console.log("----- SESSION UPDATE ----- ");
-    console.log("[server.js] sessionStore.onerror: ");
-    console.log(sessionId);
+    console.log("----- SESSION ERROR ----- ");
 });
 
+// need to store something in the session in order for it to persist upon entry
 app.post('/api/getAccessTokenFromSession', function(req, res){
-    console.log("[server.js] api/getAccessTokenFromSession: all sessions");
-    console.log(req.sessionID);
-    console.log(req.session.id);
-    var soundcloudAccessToken = req.session.soundcloudAccessToken;
-    if(req.session.soundcloudAccessToken){
-        console.log('[server.js] api/getAccessTokenFromSession: access token has been set');
-        var soundcloudAccessToken = req.session.soundcloudAccessToken;
-        initializeSoundcloudApi(soundcloudAccessToken);
-        res.send({soundcloudAccessToken: soundcloudAccessToken});
-    } else {
-        req.session = null;
-        res.status(400).send("[server.js] api/getAccessTokenFromSession: the access Token has not been set")
+    if(!req.session.new){
+        // initializes persistence of session
+        req.session.new = true;
     }
+    getSessionFromSessionStore(SESSION_ID, function(err, session){
+        if(!err, session){
+            if(session.soundcloudAccessToken){
+                console.log('[server.js] api/getAccessTokenFromSession: access token has been set');
+                var soundcloudAccessToken = req.session.soundcloudAccessToken;
+                initializeSoundcloudApi(soundcloudAccessToken); // place cb here;
+                res.send({soundcloudAccessToken: soundcloudAccessToken});
+            } else {
+                res.status(400).send({ soundcloudAccess: false,
+                                       errorMessage: "[server.js] api/getAccessTokenFromSession: the access Token has not been set"})
+            }
+        } else {
+            res.status(400).send({ soundcloudAccess: false,
+                                   errorMessage: "[server.js] api/getAccessTokenFromSession:" + err})
+        }
+    });
 });
+
 
 // accessToken as part of redirect
 app.get('/api/redirectAuth', function(req,res){
   // differentiate at this url between prod and dev environments.
     console.log("[server.js] api/redirectAuth: initializing SC.init");
     console.log(req.session);
-    initializeSoundcloudApi();
-    var redirectUrl = SC.getConnectUrl();
-    if(!redirectUrl){
-        res.status(400).send("[server.js] api/redirectAuth: redirect url not available");
+    // add callback or promise here
+    var initRes = initializeSoundcloudApi();
+    if(initRes){
+        var redirectUrl = SC.getConnectUrl();
+        if(!redirectUrl){
+            res.status(400).send("[server.js] api/redirectAuth: redirect url not available");
+        } else {
+            res.send({redirectUrl: redirectUrl});
+        }
     } else {
-        res.send({redirectUrl: redirectUrl});
+        res.status(400).send("[server.js] api/redirectAuth: soundcloud not initialized");
     }
 });
 
 app.post('/api/getAccessToken', function(req, res){
     var authorizationCode = req.body.authorizationCode;
-    console.log("[server.js] api/getAccessToken : " + authorizationCode);
-    console.log("[server.js] api/getAccessToken : session token" + req.session);
     SC.authorize(authorizationCode, function(err, accessToken) {
-        if (err) {
-          res.status(400).send(err);
-        } else {
+        if (!err && accessToken) {
           if (!soundcloudAccessToken){
             req.session.soundcloudAccessToken = accessToken;
             var soundcloudAccessToken = req.session.soundcloudAccessToken;
             req.session.save(function(err){
                 if(!err) {
                     console.log("[server.js] session saved...");
+                    console.log('[server.js] api/getAccessToken: Soundcloud Access Token Saved in Session');
+                } else {
+                    console.log("[server.js] session was not saved...");
                 }
             });
-            console.log('[server.js] api/getAccessToken: Soundcloud Access Token Saved in Session');
           }
           res.send({soundcloudAccessToken : accessToken});
+        } else {
+          res.status(400).send(err); // send jqxhr response
         }
     });
 })
 
 app.post('/api/checkAccessTokenFromSession', function(req, res){
-    var soundcloudAccessToken = req.session.soundcloudAccessToken;
     console.log("[server.js] api/checkAccessTokenFromSession: ");
-    console.log(req.sessionID);
-    console.log("this is from req.session.soundcloudAccessToken");
-    console.log(soundcloudAccessToken);
-    sessionStore.get(req.sessionID, function(err, session){
-        console.log("[server.js] api/checkAccessTokenFromSession: getting from session store: ");
-        console.log(session);
+    getSessionFromSessionStore(SESSION_ID, function(err, session){
+        if(!err && session){
+            if(checkAccessToken(session.soundcloudAccessToken)){
+                console.log("[server.js] api/checkAccessTokenFromSession: access token in session");
+                res.send({ soundcloudAccess: true, soundcloudAccessToken: session.soundcloudAccessToken });
+            } else {
+                // log out
+                console.log("[server.js] api/checkAccessTokenFromSession: checkaccesstoken false");
+                res.status(400).send({ soundcloudAccess: false,
+                                        errorMessage: "[server.js] api/checkAccessTokenFromSession: access token not in session" });
+            }
+        } else {
+            console.log("[server.js] api/checkAccessTokenFromSession: session not available");
+            res.status(400).send({ soundcloudAccess: false, errorMessage: "[server.js] api/checkAccessTokenFromSession:" + err});
+        }
     });
-    if(checkAccessToken(soundcloudAccessToken)){
-        console.log("[server.js] api/checkAccessTokenFromSession: access token in session");
-        res.send({
-                    soundcloudAccess: true,
-                    soundcloudAccessToken: soundcloudAccessToken
-                });
-    } else {
-        console.log("[server.js] api/checkAccessTokenFromSession: no access token in session");
-        res.status(400).send({
-                soundcloudAccess: false,
-                errorMessage: "[server.js] api/checkAccessTokenFromSession : no access token in session"
-            });
-    }
 })
 
 /*
     for query data:
         req.query to get access to params
 */
+
 app.get('/api/soundcloudApiGet', function(req, res){
-    console.log("[server.js] api/soundcloudApiGet: touching session");
-    sessionStore.touch(req.sessionID, req.session, function(err){
-        console.log(req.sessionID);
-        console.log(req.session);
-        console.log(err);
-    });
-    console.log("[server.js] api/soundcloudApiGet : session token");
-    console.log(req.session);
-    console.log("[server.js] api/soundcloudApiGet: session id");
-    console.log(req.sessionID);
-    console.log(req.session.id);
-    console.log("this is from req.session.soundcloudAccessToken");
-    console.log(req.session.soundcloudAccessToken);
-    sessionStore.get(req.sessionID, function(err, session){
-        console.log("[server.js] api/soundcloudApiGet: getting from session store: ");
-        console.log(session);
-    });
-    if(checkAccessToken(req.session.soundcloudAccessToken) === false){
-        res.status(400).send({
-            soundcloudAccess: false,
-            errorMessage: "[server.js] api/soundcloudApiGet do not have access to access token"
-        });
-        return false;
-    }
-    console.log("[server.js] api/soundcloudApiGet : apiUrl");
+    // getting set as a new session each time.
     var apiUrl = req.query.apiUrl;
-    console.log(apiUrl);
-    SC.get(apiUrl, function(err, results){
+    SC.get(apiUrl, function(err, scRes){
         console.log("[server.js] api/soundcloudApiGet: SC.get");
-        if(!err){
-            res.send(results);
+        if(!err && scRes){
+            res.send(scRes);
         } else {
-            console.log(err);
-            res.status(400).send({
-                errorMessage: err
-            });
+            res.status(400).send({ errorMessage: err });
         }
     });
 });
-
 
 function checkAccessToken(soundcloudAccessToken){
     console.log("[server.js] checkAccessToken: ");
@@ -252,25 +225,48 @@ function checkAccessToken(soundcloudAccessToken){
 }
 
 function initializeSoundcloudApi(soundcloudAccessToken){
+    // use promise?
+    // add callback here;
     console.log("[server.js] initializeSoundcloudApi: ");
+    console.log("SC.isInit: " + SC.isInit);
+    console.log(Date.now());
+    new Promise(function(){
+        console.log("this is running");
+        setTimeout(function(){
+            console.log(Date.now());
+            console.log("this ran");
+        }, 0);
+    });
     if(!soundcloudAccessToken){
-            console.log("[server.js] initializeSoundcloudApi: soundcloudAccessToken not available");
-            SC.init({
-                        id: soundcloudClientId,
-                        secret: soundcloudClientSecret,
-                        uri: soundcloudURI,
-                        scope: soundcloudScope
-            });
+        console.log("[server.js] initializeSoundcloudApi: soundcloudAccessToken not available");
+        console.log(Date.now())
+        SC.init({
+                    id: SOUNDCLOUD_CLIENT_ID,
+                    secret: SOUNDCLOUD_CLIENT_SECRET,
+                    uri: SOUNDCLOUD_URI,
+                    scope: SOUNDCLOUD_SCOPE
+        });
     } else {
-            console.log("[server.js] initializeSoundcloudApi: soundcloudAccessToken Available");
-            SC.init({id: soundcloudClientId,
-                        secret: soundcloudClientSecret,
-                        uri: soundcloudURI,
-                        accessToken: soundcloudAccessToken,
-                        scope: soundcloudScope
-                    });
+        console.log("[server.js] initializeSoundcloudApi: soundcloudAccessToken Available");
+        console.log(Date.now())
+        SC.init({
+                    id: SOUNDCLOUD_CLIENT_ID,
+                    secret: SOUNDCLOUD_CLIENT_SECRET,
+                    uri: SOUNDCLOUD_URI,
+                    accessToken: soundcloudAccessToken,
+                    scope: SOUNDCLOUD_SCOPE
+        }, function(res){
+            console.log(res);
+        });
     }
     return SC.isInit;
+}
+
+function getSessionFromSessionStore(sessionId, cb){
+    console.log("[server.js] getSessionFromSessionStore: ");
+    sessionStore.get(sessionId, function(err, session){
+        cb(err, session);
+    });
 }
 
 app.use(function(req, res) {

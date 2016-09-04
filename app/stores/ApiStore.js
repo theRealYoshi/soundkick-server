@@ -29,6 +29,7 @@ class ApiStore {
 
   onSoundcloudApiGetFail(jqXhr){
       console.log("[ApiStore.js] onSoundcloudApiGetFail: ");
+      console.log(jqXhr);
       console.log(jqXhr.responseJSON.errorMessage);
       if(jqXhr.responseJSON.soundcloudAccess === false){
           jqXhr.history.pushState(null, '/');

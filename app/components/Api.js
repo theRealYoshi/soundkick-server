@@ -26,12 +26,15 @@ class Api extends React.Component {
     this.setState(state);
   }
 
-  _handleTracks(){
+  _apiCall(){
     var payload = {
         apiUrl: '/me/activities/all/own',
         history: this.props.history
     }
-    ApiActions.soundcloudApiGet(payload);
+    ApiActions.checkAccessToken({ history: this.props.history}, function(){
+        console.log("checked access token and successful");
+        ApiActions.soundcloudApiGet(payload);
+    });
   }
 
   render() {
@@ -40,7 +43,7 @@ class Api extends React.Component {
       <div className='container'>
         <div className='row'>
           At Api Page
-          <div className='redirectAuth' onClick={this._handleTracks.bind(this)}>
+          <div className='redirectAuth' onClick={this._apiCall.bind(this)}>
             click me
           </div>
         </div>

@@ -10,13 +10,16 @@ class ApiActions {
     );
   }
 
-  checkAccessToken(payload){
+  checkAccessToken(payload, scApiRequest){
     $.ajax({
             type: 'POST',
             url: '/api/checkAccessTokenFromSession'
     })
     .done((data) => {
         this.actions.checkAccessTokenFromSessionSuccess(data);
+        if(scApiRequest){
+            scApiRequest();
+        }
     })
     .fail(jqXhr => {
         //redirect to homepage to login again
