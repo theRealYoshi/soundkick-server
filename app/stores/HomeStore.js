@@ -16,8 +16,7 @@ class HomeStore {
   }
 
   onGetAccessTokenFromSessionFail(jqXhr){
-      console.log("[Homestore.js] onGetAccessTokenFromSessionFail:" );
-      console.log(jqXhr.responseText);
+    // jqXhr.responseJSON.errorMessage;
   }
 
   onRedirectSuccess(data){

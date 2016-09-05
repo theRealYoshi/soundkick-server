@@ -16,11 +16,11 @@ class HomeActions {
           url: '/api/getAccessTokenFromSession'
     })
     .done((data) => {
-      data.history = payload.history;
-      this.actions.getAccessTokenFromSessionSuccess(data);
+        data.history = payload.history;
+        this.actions.getAccessTokenFromSessionSuccess(data);
     })
     .fail(jqXhr => {
-      this.actions.getAccessTokenFromSessionFail(jqXhr);
+        this.actions.getAccessTokenFromSessionFail(jqXhr);
     })
   }
 
@@ -30,10 +30,10 @@ class HomeActions {
           url: '/api/redirectAuth'
      })
      .done((data) => {
-       this.actions.redirectSuccess(data);
+        this.actions.redirectSuccess(data);
      })
      .fail(jqXhr => {
-       this.actions.redirectFail(jqXhr.responseJSON.message);
+        this.actions.redirectFail(jqXhr.responseJSON.message);
      });
   }
 

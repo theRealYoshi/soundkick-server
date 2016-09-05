@@ -66,7 +66,7 @@ app.use(session({
     saveUninitialized: false,
     resave: false,
     cookie: {
-        maxAge: 3 * 60 * 1000 // 10 minutes
+        maxAge: 5 * 60 * 1000 // 10 minutes
     },
     store: sessionStore
 }));
@@ -102,19 +102,44 @@ sessionStore.on("error", function(sessionId){
     console.log("----- SESSION ERROR ----- ");
 });
 
+var initializeSoundcloud = new Promise(function(resolve, reject){
+    console.log("[server.js] initializeSoundcloud promise");
+    initializeSoundcloudApi();
+    resolve();
+});
+
 // need to store something in the session in order for it to persist upon entry
 app.post('/api/getAccessTokenFromSession', function(req, res){
+    console.log('[server.js] api/getAccessTokenFromSession: started running');
     if(!req.session.new){
-        // initializes persistence of session
         req.session.new = true;
     }
     getSessionFromSessionStore(SESSION_ID, function(err, session){
-        if(!err, session){
+        if(!err && session){
             if(session.soundcloudAccessToken){
                 console.log('[server.js] api/getAccessTokenFromSession: access token has been set');
-                var soundcloudAccessToken = req.session.soundcloudAccessToken;
-                initializeSoundcloudApi(soundcloudAccessToken); // place cb here;
-                res.send({soundcloudAccessToken: soundcloudAccessToken});
+                var initializeSoundcloudWithToken = new Promise(function(resolve, reject){
+                    console.log("inside promise");
+                    initializeSoundcloudApi(session.soundcloudAccessToken);
+                    resolve();
+                });
+                initializeSoundcloudWithToken.then(function(){
+                    if(SC.isInit && SC.isAuthorized){
+                        console.log("returned isInit true and accessToken: " + SC.accessToken);
+                        res.send({soundcloudAccessToken: SC.accessToken});
+                    } else if(!SC.isAuthorized){
+                        console.log("SC is not authorized");
+                        res.status(400).send( { soundcloudAccess: false,
+                                                errorMessage: "[server.js] api/getAccessTokenFromSession: soundcloud not authorized"});
+                    } else {
+                        console.log("SC is not initialized");
+                        res.status(400).send( { soundcloudAccess: false,
+                                                errorMessage: "[server.js] api/getAccessTokenFromSession: soundcloud not initialized"});
+                    }
+                }).catch(function(reject){
+                    res.status(400).send({ soundcloudAccess: false,
+                                            errorMessage: "[server.js] api/getAccessTokenFromSession: " + reject});
+                });
             } else {
                 res.status(400).send({ soundcloudAccess: false,
                                        errorMessage: "[server.js] api/getAccessTokenFromSession: the access Token has not been set"})
@@ -129,21 +154,23 @@ app.post('/api/getAccessTokenFromSession', function(req, res){
 
 // accessToken as part of redirect
 app.get('/api/redirectAuth', function(req,res){
-  // differentiate at this url between prod and dev environments.
+    // differentiate at this url between prod and dev environments.
     console.log("[server.js] api/redirectAuth: initializing SC.init");
-    console.log(req.session);
-    // add callback or promise here
-    var initRes = initializeSoundcloudApi();
-    if(initRes){
-        var redirectUrl = SC.getConnectUrl();
-        if(!redirectUrl){
-            res.status(400).send("[server.js] api/redirectAuth: redirect url not available");
+    initializeSoundcloud.then(function(){
+        console.log("initializeSoundcloud then");
+        if(SC.isInit){
+            var redirectUrl = SC.getConnectUrl();
+            if(!redirectUrl){
+                    res.status(400).send("[server.js] api/redirectAuth: redirect url not available");
+            } else {
+                    res.send({redirectUrl: redirectUrl});
+            }
         } else {
-            res.send({redirectUrl: redirectUrl});
+            res.status(400).send("[server.js] api/redirectAuth: soundcloud not initialized");
         }
-    } else {
-        res.status(400).send("[server.js] api/redirectAuth: soundcloud not initialized");
-    }
+    }).catch(function(reject){
+        res.status(400).send("[server.js] api/redirectAuth: promise rejected " + reject);
+    });
 });
 
 app.post('/api/getAccessToken', function(req, res){
@@ -219,48 +246,51 @@ function checkAccessToken(soundcloudAccessToken){
     if(!soundcloudAccessToken || soundcloudAccessToken !== SC.accessToken || !SC.isAuthorized){
         return false;
     } else if(!SC.isInit){
-        return initializeSoundcloudApi(soundcloudAccessToken);
+        var initializeSoundcloudWithToken = new Promise(function(resolve, reject){
+            initializeSoundcloudApi(soundcloudAccessToken);
+            resolve();
+        });
+        initializeSoundcloudWithToken.then(function(){
+            return SC.isAuthorized;
+        });
     }
     return true;
 }
 
-function initializeSoundcloudApi(soundcloudAccessToken){
-    // use promise?
-    // add callback here;
+function initializeSoundcloudApi(soundcloudAccessToken) {
     console.log("[server.js] initializeSoundcloudApi: ");
-    console.log("SC.isInit: " + SC.isInit);
-    console.log(Date.now());
-    new Promise(function(){
-        console.log("this is running");
-        setTimeout(function(){
-            console.log(Date.now());
-            console.log("this ran");
-        }, 0);
-    });
-    if(!soundcloudAccessToken){
-        console.log("[server.js] initializeSoundcloudApi: soundcloudAccessToken not available");
-        console.log(Date.now())
-        SC.init({
+    console.log(soundcloudAccessToken);
+    var initSC = new Promise(function(resolve, reject){
+        if(!soundcloudAccessToken){
+            console.log("no access token");
+            SC.init({
                     id: SOUNDCLOUD_CLIENT_ID,
                     secret: SOUNDCLOUD_CLIENT_SECRET,
                     uri: SOUNDCLOUD_URI,
                     scope: SOUNDCLOUD_SCOPE
-        });
-    } else {
-        console.log("[server.js] initializeSoundcloudApi: soundcloudAccessToken Available");
-        console.log(Date.now())
-        SC.init({
+            })
+        } else {
+            console.log("access token available");
+            SC.init({
                     id: SOUNDCLOUD_CLIENT_ID,
                     secret: SOUNDCLOUD_CLIENT_SECRET,
                     uri: SOUNDCLOUD_URI,
                     accessToken: soundcloudAccessToken,
                     scope: SOUNDCLOUD_SCOPE
-        }, function(res){
-            console.log(res);
-        });
-    }
-    return SC.isInit;
+            })
+        }
+        resolve();
+    });
+
+    initSC.then(function(isInitSC){
+        return SC.isInit;
+    })
+    .catch(function(reject){
+        console.log("this promise was rejected: " + reject);
+        return false;
+    });
 }
+
 
 function getSessionFromSessionStore(sessionId, cb){
     console.log("[server.js] getSessionFromSessionStore: ");
