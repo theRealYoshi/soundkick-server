@@ -10,15 +10,15 @@ class ApiActions {
     );
   }
 
-  checkAccessToken(payload, scApiRequest){
+  checkAccessToken(payload, cb){
     $.ajax({
             type: 'POST',
             url: '/api/checkAccessTokenFromSession'
     })
     .done((data) => {
         this.actions.checkAccessTokenFromSessionSuccess(data);
-        if(scApiRequest){
-            scApiRequest();
+        if(cb){
+            cb();
         }
     })
     .fail(jqXhr => {
@@ -28,7 +28,7 @@ class ApiActions {
     })
   }
 
-  soundcloudApiGet(payload){
+  soundcloudApiGet(payload, cb){
       $.ajax({
                 type: 'GET',
                 url: 'api/soundcloudApiGet',
@@ -37,8 +37,9 @@ class ApiActions {
                 }
       })
       .done((data) => {
-          console.log("[ApiActions.js] soundcloudApiGet: Success");
-          this.actions.soundcloudApiGetSuccess(data);
+            if(cb){
+                cb(data);
+            }
       })
       .fail(jqXhr => {
           console.log("[ApiActions.js] soundcloudApiGet: Fail");

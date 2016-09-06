@@ -10,7 +10,7 @@ class GetAccessTokenStore {
     console.log(data.soundcloudAccessToken);
     console.log('redirecting...');
     setTimeout(function(){
-      data.history.pushState(null, '/api');
+      data.history.pushState(null, '/overview');
     }, 3000);
   }
 

@@ -235,6 +235,11 @@ app.get('/api/soundcloudApiGet', function(req, res){
 });
 
 function checkAccessToken(soundcloudAccessToken){
+    var initializeSoundcloudWithToken = new Promise(function(resolve, reject){
+        console.log("inside promise");
+        initializeSoundcloudApi(session.soundcloudAccessToken);
+        resolve();
+    });
     console.log("[server.js] checkAccessToken: ");
     console.log(soundcloudAccessToken);
     console.log("[server.js] SC.accessToken: ");
@@ -243,18 +248,15 @@ function checkAccessToken(soundcloudAccessToken){
     console.log(SC.isAuthorized);
     console.log("[server.js] SC.isInit: ");
     console.log(SC.isInit);
-    if(!soundcloudAccessToken || soundcloudAccessToken !== SC.accessToken || !SC.isAuthorized){
+    if(!soundcloudAccessToken){
         return false;
-    } else if(!SC.isInit){
-        var initializeSoundcloudWithToken = new Promise(function(resolve, reject){
-            initializeSoundcloudApi(soundcloudAccessToken);
-            resolve();
-        });
+    } else if(!SC.isAuthorized || !SC.isInit){
         initializeSoundcloudWithToken.then(function(){
             return SC.isAuthorized;
         });
+    } else {
+        return true;
     }
-    return true;
 }
 
 function initializeSoundcloudApi(soundcloudAccessToken) {

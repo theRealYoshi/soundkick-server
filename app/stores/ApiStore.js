@@ -13,27 +13,26 @@ class ApiStore {
             soundcloudAccessToken: string
       }
       */
-      return true;
+
+    return true;
   }
 
   onCheckAccessTokenFromSessionFail(jqXhr){
-      console.log("[ApiStore.js] onCheckAccessTokenFromSessionFail: ");
-      console.log(jqXhr.responseJSON.errorMessage);
-      jqXhr.history.pushState(null, '/');
+    console.log("[ApiStore.js] onCheckAccessTokenFromSessionFail: ");
+    console.log(jqXhr.responseJSON.errorMessage);
+    jqXhr.history.pushState(null, '/');
   }
 
-  onSoundcloudApiGetSuccess(data){
-      console.log("[ApiStore.js] onSoundcloudApiGetSuccess: ");
-      console.log(data)
+  onSoundcloudOverviewGetSuccess(data){
+    console.log(data)
   }
 
-  onSoundcloudApiGetFail(jqXhr){
-      console.log("[ApiStore.js] onSoundcloudApiGetFail: ");
-      console.log(jqXhr);
-      console.log(jqXhr.responseJSON.errorMessage);
-      if(jqXhr.responseJSON.soundcloudAccess === false){
-          jqXhr.history.pushState(null, '/');
-      }
+  onSoundcloudOverviewGetFail(jqXhr){
+    console.log("[ApiStore.js] onSoundcloudOverviewGetFail: ");
+    console.log(jqXhr.responseJSON.errorMessage);
+    if(jqXhr.responseJSON.soundcloudAccess === false){
+        jqXhr.history.pushState(null, '/');
+    }
   }
 }
 

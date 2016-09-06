@@ -28,11 +28,10 @@ class Api extends React.Component {
 
     _apiCall(){
         var payload = {
-            apiUrl: '/me/activities/all/own',
+            apiUrl: '/me/',
             history: this.props.history
         }
         ApiActions.checkAccessToken({ history: this.props.history}, function(){
-            console.log("checked access token and successful");
             ApiActions.soundcloudApiGet(payload);
         });
     }

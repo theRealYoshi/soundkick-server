@@ -11,7 +11,7 @@ class HomeStore {
     console.log('session token has been set to :' + data.soundcloudAccessToken);
     console.log('redirecting...');
     setTimeout(function(){
-      data.history.pushState(null, '/api');
+      data.history.pushState(null, '/overview');
     }, 5000);
   }
 
